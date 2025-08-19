@@ -29,7 +29,7 @@ fn test_transcribe() {
         sampling_strategy: None,
     };
     let start = Instant::now();
-    let result = crate::transcribe::transcribe(&ctx, options, None, None, None, None, None);
+    let result = crate::transcribe::transcribe_with_callbacks(&ctx, options, None, None, None, None, None);
     println!("{:?}", result);
     println!(
         "Elapsed time: {:.2} seconds",

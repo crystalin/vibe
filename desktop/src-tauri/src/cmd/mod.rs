@@ -21,6 +21,7 @@ use vibe_core::get_vibe_temp_folder;
 use vibe_core::transcript::Segment;
 use vibe_core::transcript::Transcript;
 pub mod audio;
+pub mod live_transcription;
 pub mod ytdlp;
 
 /// Return true if there's internet connection
@@ -324,7 +325,7 @@ pub async fn transcribe(
     let ffmpeg_options = ffmpeg_options.to_vec();
     tracing::debug!("ffmpeg additional options: {:?}", ffmpeg_options);
     let unwind_result = catch_unwind(AssertUnwindSafe(|| {
-        vibe_core::transcribe::transcribe(
+        vibe_core::transcribe::transcribe_with_callbacks(
             &ctx.handle,
             &options,
             Some(Box::new(progress_callback)),

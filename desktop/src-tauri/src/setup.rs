@@ -37,6 +37,9 @@ pub fn setup(app: &App) -> Result<(), Box<dyn std::error::Error>> {
 
     // Manage model context
     app.manage(Mutex::new(None::<ModelContext>));
+    
+    // Manage live transcription state
+    app.manage(crate::cmd::live_transcription::LiveTranscriptionState::new());
 
     let store = app.store(STORE_FILENAME)?;
 
