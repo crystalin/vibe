@@ -1,5 +1,5 @@
 use crate::transcript::Segment;
-use eyre::Result;
+use eyre::{eyre, Result};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
