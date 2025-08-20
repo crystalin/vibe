@@ -3,7 +3,7 @@ use eyre::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tauri::{Emitter, Listener, Manager, State};
+use tauri::{Emitter, State};
 use tokio::sync::Mutex;
 use vibe_core::live_transcription::{
     LiveTranscriptionConfig, LiveTranscriptionProcessor, LiveTranscriptionStats,
@@ -77,10 +77,9 @@ pub async fn start_live_transcription(
     live_state: State<'_, LiveTranscriptionState>,
 ) -> Result<String> {
     let model_context = model_context_state.lock().await;
-    if model_context.is_none() {
-        bail!("Please load model first")
-    }
-    let ctx = model_context.as_ref().context("model context")?;
+    let ctx = model_context
+        .as_ref()
+        .ok_or_else(|| eyre::eyre!("Please load model first"))?;
     
     // Create configuration from options
     let config: LiveTranscriptionConfig = options.into();
