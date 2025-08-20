@@ -227,7 +227,7 @@ export function useLiveTranscription(): UseLiveReturn {
     
     try {
       const config: LiveTranscriptionConfig = {
-        model: preference?.modelOptions?.model,
+        model: preference?.modelPath,
         language: preference?.modelOptions?.lang,
         minSpeechDuration: 250,
         minSilenceDuration: 500,
