@@ -113,7 +113,7 @@ pub struct LiveTranscriptionProcessor {
 impl LiveTranscriptionProcessor {
     /// Create new live transcription processor
     pub fn new(
-        whisper_ctx: WhisperContext,
+        whisper_ctx: Arc<Mutex<WhisperContext>>,
         config: LiveTranscriptionConfig,
     ) -> Result<Self> {
         // Create session for this live transcription

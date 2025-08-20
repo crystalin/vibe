@@ -1,5 +1,5 @@
 use crate::setup::ModelContext;
-use eyre::{bail, Context, Result};
+use eyre::{bail, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -84,7 +84,7 @@ pub async fn start_live_transcription(
     // Create configuration from options
     let config: LiveTranscriptionConfig = options.into();
     
-    // Create new processor
+    // Create new processor with Arc<Mutex<WhisperContext>>
     let mut processor = LiveTranscriptionProcessor::new(ctx.handle.clone(), config)?;
     let session_id = processor.session_id().clone();
     
@@ -188,7 +188,7 @@ pub async fn force_process_live_transcription(
     let sessions = live_state.sessions.lock().await;
     
     if let Some(processor_arc) = sessions.get(&session_id) {
-        let processor = processor_arc.lock().await;
+        let _processor = processor_arc.lock().await;
         // Send force process command via the processor's internal mechanism
         // This would require adding a public method to LiveTranscriptionProcessor
         // For now, we'll just log the request
@@ -242,7 +242,7 @@ pub async fn cleanup_live_sessions(live_state: &LiveTranscriptionState) {
     
     for session_id in session_ids {
         if let Some(processor_arc) = sessions.get(&session_id) {
-            let processor = processor_arc.lock().await;
+            let _processor = processor_arc.lock().await;
             let stats = processor.get_stats();
             
             // Remove sessions that have been inactive for too long
@@ -251,9 +251,8 @@ pub async fn cleanup_live_sessions(live_state: &LiveTranscriptionState) {
                     tracing::warn!("Cleaning up inactive session: {}", session_id);
                     drop(processor); // Release lock
                     if let Some(processor_arc) = sessions.remove(&session_id) {
-                        if let Ok(mut processor) = processor_arc.lock().await {
-                            let _ = processor.stop();
-                        }
+                        let mut processor = processor_arc.lock().await;
+                        let _ = processor.stop();
                     }
                 }
             }
