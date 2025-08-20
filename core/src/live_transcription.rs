@@ -159,7 +159,7 @@ impl LiveTranscriptionProcessor {
         
         Ok(Self {
             session_id,
-            whisper_ctx: Arc::new(Mutex::new(whisper_ctx)),
+            whisper_ctx,
             config,
             audio_buffer,
             chunk_processor,
