@@ -1,8 +1,12 @@
 pub mod audio;
+pub mod audio_buffer;
 pub mod config;
 pub mod downloader;
+pub mod live_transcription;
+pub mod session;
 pub mod transcribe;
 pub mod transcript;
+pub mod vad;
 
 #[cfg(test)]
 mod test;

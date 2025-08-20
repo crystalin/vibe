@@ -1,0 +1,173 @@
+version: 1
+generated_by: repo-knowledge-tracker
+last_updated: "2025-01-19T21:00:00Z"
+entries:
+  - path: "core/src/transcribe.rs"
+    title: "Core Transcription Engine"
+    why_important: "Main transcription logic using whisper-rs with callbacks for progress/segments/abort. Critical for implementing live transcript feature."
+    topics: ["transcription", "whisper", "callbacks", "diarization"]
+    owners: ["@core-team"]
+    linked_docs: ["README.md"]
+    related_components: ["core/src/audio.rs", "desktop/src-tauri/src/cmd/mod.rs"]
+    dependencies:
+      direct: ["whisper-rs", "pyannote-rs", "eyre"]
+      indirect: ["tokio", "tracing"]
+    update_triggers: ["whisper model changes", "callback interface changes", "speaker detection updates"]
+    last_seen: "2025-01-19"
+    last_reviewed_at: "2025-01-19T21:00:00Z"
+    staleness_hints: "Global progress callback state needs refactoring for concurrent sessions"
+    recommended_action: "Refactor global PROGRESS_CALLBACK to session-scoped architecture for live transcript support"
+    notes: "Contains existing new_segment_callback infrastructure perfect for live updates"
+
+  - path: "desktop/src-tauri/src/cmd/audio.rs"
+    title: "Real-time Audio Recording"
+    why_important: "Handles real-time audio capture using cpal with multiple devices. Foundation for live transcript audio streaming."
+    topics: ["audio", "cpal", "recording", "streaming"]
+    owners: ["@backend-team"]
+    linked_docs: ["docs/building.md"]
+    related_components: ["desktop/src-tauri/src/screen_capture_kit.rs", "core/src/audio.rs"]
+    dependencies:
+      direct: ["cpal", "hound", "tauri"]
+      indirect: ["tokio", "serde_json"]
+    update_triggers: ["audio device API changes", "streaming architecture changes", "platform support updates"]
+    last_seen: "2025-01-19"
+    last_reviewed_at: "2025-01-19T21:00:00Z"
+    staleness_hints: "Currently file-based recording - needs buffer-based streaming for live transcript"
+    recommended_action: "Implement circular buffer streaming for live audio processing"
+    notes: "Already supports multi-device recording and real-time WAV writing"
+
+  - path: "desktop/src-tauri/src/cmd/mod.rs"
+    title: "Tauri Command Interface"
+    why_important: "Main Tauri command handlers including transcribe function. Entry point for all backend operations."
+    topics: ["tauri", "commands", "IPC", "transcription"]
+    owners: ["@backend-team"]
+    linked_docs: ["tauri.conf.json"]
+    related_components: ["core/src/transcribe.rs", "desktop/src/pages/home/viewModel.ts"]
+    dependencies:
+      direct: ["tauri", "vibe_core", "eyre", "serde"]
+      indirect: ["tokio", "futures"]
+    update_triggers: ["API interface changes", "command signature updates", "error handling changes"]
+    last_seen: "2025-01-19"
+    last_reviewed_at: "2025-01-19T21:00:00Z"
+    staleness_hints: "IPC events are stringly-typed and scattered across modules"
+    recommended_action: "Centralize IPC schema and add new live_transcript command"
+    notes: "Already has new_segment event emission infrastructure for streaming"
+
+  - path: "desktop/src/pages/home/viewModel.ts"
+    title: "Main UI State Management"
+    why_important: "Core frontend logic handling audio recording, transcription, and real-time updates. Contains event listeners for streaming."
+    topics: ["UI", "state", "events", "transcription"]
+    owners: ["@frontend-team"]
+    linked_docs: ["desktop/README.md"]
+    related_components: ["desktop/src/pages/home/Page.tsx", "desktop/src/components/TextArea.tsx"]
+    dependencies:
+      direct: ["@tauri-apps/api", "react", "react-i18next"]
+      indirect: ["usehooks-ts", "react-hot-toast"]
+    update_triggers: ["UI component changes", "event handling updates", "state management refactoring"]
+    last_seen: "2025-01-19"
+    last_reviewed_at: "2025-01-19T21:00:00Z"
+    staleness_hints: "Contains existing real-time event patterns ready for live transcript extension"
+    recommended_action: "Extend with live transcript state management and UI controls"
+    notes: "Already implements listen('new_segment') and streaming segment updates"
+
+  - path: "desktop/src/components/TextArea.tsx"
+    title: "Transcript Display Component"
+    why_important: "Main UI component for displaying and editing transcripts. Supports multiple formats including speaker detection."
+    topics: ["UI", "transcript", "display", "formats"]
+    owners: ["@frontend-team"]
+    linked_docs: ["desktop/src/lib/transcript.ts"]
+    related_components: ["desktop/src/lib/transcript.ts", "desktop/src/components/HtmlView.tsx"]
+    dependencies:
+      direct: ["react", "@tauri-apps/plugin-dialog", "@tauri-apps/plugin-fs"]
+      indirect: ["react-hot-toast", "react-i18next"]
+    update_triggers: ["transcript format changes", "UI component updates", "export functionality changes"]
+    last_seen: "2025-01-19"
+    last_reviewed_at: "2025-01-19T21:00:00Z"
+    staleness_hints: "Ready for live streaming updates with existing segment state management"
+    recommended_action: "Add live transcript mode with real-time segment streaming visualization"
+    notes: "Supports speaker prefixes and multiple output formats (srt, vtt, html, json)"
+
+  - path: "core/src/audio.rs"
+    title: "Audio Processing & FFmpeg Integration"
+    why_important: "Handles audio normalization, WAV parsing, and FFmpeg operations. Critical for audio pipeline processing."
+    topics: ["audio", "ffmpeg", "normalization", "processing"]
+    owners: ["@core-team"]
+    linked_docs: ["docs/building.md"]
+    related_components: ["core/src/transcribe.rs", "desktop/src-tauri/src/cmd/audio.rs"]
+    dependencies:
+      direct: ["hound", "eyre", "which"]
+      indirect: ["std::process", "tracing"]
+    update_triggers: ["ffmpeg version changes", "audio format support updates", "normalization algorithm changes"]
+    last_seen: "2025-01-19"
+    last_reviewed_at: "2025-01-19T21:00:00Z"
+    staleness_hints: "FFmpeg process management lacks timeouts and structured error handling"
+    recommended_action: "Add FFmpeg timeouts and improve error reporting for reliability"
+    notes: "Contains audio merging and normalization functions used in recording pipeline"
+
+  - path: "core/src/config.rs"
+    title: "Transcription Configuration"
+    why_important: "Defines TranscribeOptions struct with all Whisper parameters. Configuration interface for transcription features."
+    topics: ["config", "options", "whisper", "parameters"]
+    owners: ["@core-team"]
+    linked_docs: ["docs/models.md"]
+    related_components: ["core/src/transcribe.rs", "desktop/src/providers/Preference.tsx"]
+    dependencies:
+      direct: ["serde"]
+      indirect: ["utoipa"]
+    update_triggers: ["whisper parameter changes", "configuration schema updates", "feature additions"]
+    last_seen: "2025-01-19"
+    last_reviewed_at: "2025-01-19T21:00:00Z"
+    staleness_hints: "May need extension for live transcript-specific configuration options"
+    recommended_action: "Extend configuration for streaming parameters and live transcript settings"
+    notes: "Already supports word timestamps, sampling strategies, and temperature settings"
+
+  - path: "desktop/src/lib/transcript.ts"
+    title: "Transcript Data Structures & Formatting"
+    why_important: "Core TypeScript interfaces for transcript data and formatting functions. Critical for frontend transcript handling."
+    topics: ["typescript", "interfaces", "formatting", "segments"]
+    owners: ["@frontend-team"]
+    linked_docs: ["desktop/src/components/TextArea.tsx"]
+    related_components: ["desktop/src/components/TextArea.tsx", "desktop/src/pages/home/viewModel.ts"]
+    dependencies:
+      direct: ["typescript"]
+      indirect: []
+    update_triggers: ["segment structure changes", "format specification updates", "speaker detection changes"]
+    last_seen: "2025-01-19"
+    last_reviewed_at: "2025-01-19T21:00:00Z"
+    staleness_hints: "Well-designed for live transcript with existing speaker merging functions"
+    recommended_action: "Consider extensions for live transcript metadata (confidence, tentative segments)"
+    notes: "Contains mergeSpeakerSegments() and multiple format exporters (srt, vtt, json)"
+
+  - path: "desktop/src-tauri/Cargo.toml"
+    title: "Desktop Application Dependencies"
+    why_important: "Defines feature flags for hardware acceleration and platform-specific dependencies. Controls build configuration."
+    topics: ["dependencies", "features", "hardware-acceleration", "build"]
+    owners: ["@build-team"]
+    linked_docs: ["docs/building.md"]
+    related_components: ["core/Cargo.toml", "desktop/src-tauri/src/main.rs"]
+    dependencies:
+      direct: ["tauri", "vibe_core", "cpal", "hound"]
+      indirect: ["tokio", "serde", "eyre"]
+    update_triggers: ["dependency updates", "feature flag changes", "platform support additions"]
+    last_seen: "2025-01-19"
+    last_reviewed_at: "2025-01-19T21:00:00Z"
+    staleness_hints: "Hardware acceleration features ready for live transcript performance requirements"
+    recommended_action: "Ensure optimal feature configuration for live transcript performance"
+    notes: "Supports CUDA, Vulkan, CoreML, Metal, ROCm acceleration via feature flags"
+
+  - path: "core/Cargo.toml"
+    title: "Core Library Dependencies"
+    why_important: "Core library configuration with whisper-rs and pyannote-rs dependencies. Foundation for transcription capabilities."
+    topics: ["dependencies", "whisper", "pyannote", "core"]
+    owners: ["@core-team"]
+    linked_docs: ["README.md"]
+    related_components: ["desktop/src-tauri/Cargo.toml", "core/src/transcribe.rs"]
+    dependencies:
+      direct: ["whisper-rs", "pyannote-rs", "eyre", "tokio"]
+      indirect: ["serde", "tracing"]
+    update_triggers: ["whisper-rs updates", "pyannote-rs updates", "hardware acceleration changes"]
+    last_seen: "2025-01-19"
+    last_reviewed_at: "2025-01-19T21:00:00Z"
+    staleness_hints: "Uses custom whisper-rs fork with tracing support"
+    recommended_action: "Monitor whisper-rs updates for streaming/real-time capabilities"
+    notes: "Hardware acceleration features controlled via cargo features for multiple backends"

@@ -96,6 +96,14 @@ fn main() -> Result<()> {
             cmd::ytdlp::get_temp_path,
             cmd::is_crashed_recently,
             cmd::rename_crash_file,
+            cmd::live_transcription::start_live_transcription,
+            cmd::live_transcription::stop_live_transcription,
+            cmd::live_transcription::add_audio_to_live_transcription,
+            cmd::live_transcription::get_live_transcription_stats,
+            cmd::live_transcription::list_live_transcription_sessions,
+            cmd::live_transcription::force_process_live_transcription,
+            cmd::live_transcription::pause_live_transcription,
+            cmd::live_transcription::resume_live_transcription,
             #[cfg(windows)]
             cmd::set_high_gpu_preference
         ])

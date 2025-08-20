@@ -21,6 +21,7 @@ use vibe_core::get_vibe_temp_folder;
 use vibe_core::transcript::Segment;
 use vibe_core::transcript::Transcript;
 pub mod audio;
+pub mod live_transcription;
 pub mod ytdlp;
 
 /// Return true if there's internet connection
@@ -323,9 +324,10 @@ pub async fn transcribe(
     }
     let ffmpeg_options = ffmpeg_options.to_vec();
     tracing::debug!("ffmpeg additional options: {:?}", ffmpeg_options);
+    let handle = ctx.handle.blocking_lock();
     let unwind_result = catch_unwind(AssertUnwindSafe(|| {
-        vibe_core::transcribe::transcribe(
-            &ctx.handle,
+        vibe_core::transcribe::transcribe_with_callbacks(
+            &handle,
             &options,
             Some(Box::new(progress_callback)),
             Some(Box::new(new_segment_callback)),
@@ -444,7 +446,7 @@ pub async fn load_model(
             let context = vibe_core::transcribe::create_context(Path::new(&model_path), gpu_device, use_gpu)?;
             *state_guard = Some(ModelContext {
                 path: model_path.clone(),
-                handle: context,
+                handle: Arc::new(tokio::sync::Mutex::new(context)),
                 gpu_device,
                 use_gpu,
             });

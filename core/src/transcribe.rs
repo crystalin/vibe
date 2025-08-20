@@ -1,20 +1,30 @@
 use crate::config::TranscribeOptions;
+use crate::session::{get_session_manager, SessionId, SessionType};
 use crate::transcript::{Segment, Transcript};
 use crate::{audio, get_vibe_temp_folder};
-use eyre::{bail, eyre, Context, OptionExt, Result};
+use eyre::{bail, Context, OptionExt, Result};
 use hound::WavReader;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 use std::time::Instant;
 pub use whisper_rs::SegmentCallbackData;
 pub use whisper_rs::WhisperContext;
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContextParameters};
 
-type ProgressCallbackType = once_cell::sync::Lazy<Mutex<Option<Box<dyn Fn(i32) + Send + Sync>>>>;
-static PROGRESS_CALLBACK: ProgressCallbackType = once_cell::sync::Lazy::new(|| Mutex::new(None));
+// Helper trait for error logging
+trait LogError<T> {
+    fn log_error(self);
+}
+
+impl<T> LogError<T> for Result<T> {
+    fn log_error(self) {
+        if let Err(e) = self {
+            tracing::error!("Operation failed: {:?}", e);
+        }
+    }
+}
 
 pub fn create_context(model_path: &Path, gpu_device: Option<i32>, use_gpu: Option<bool>) -> Result<WhisperContext> {
     whisper_rs::install_whisper_tracing_trampoline();
@@ -85,7 +95,7 @@ pub fn create_normalized_audio(source: PathBuf, additional_ffmpeg_args: Option<V
     //    tracing::info!("Using cached normalized audio: {}", out_path.display());
     //   return Ok(out_path);
     //}
-	// ^ TODO: should we use caching? what if we have two files with the same name?
+    // ^ TODO: should we use caching? what if we have two files with the same name?
     audio::normalize(source, out_path.clone(), additional_ffmpeg_args)?;
     Ok(out_path)
 }
@@ -163,12 +173,50 @@ pub struct DiarizeOptions {
     pub max_speakers: usize,
 }
 
-pub fn transcribe(
+// Backward compatibility function - creates a session and calls the session-aware transcribe
+pub fn transcribe_with_callbacks(
     ctx: &WhisperContext,
     options: &TranscribeOptions,
     progress_callback: Option<Box<dyn Fn(i32) + Send + Sync>>,
-    new_segment_callback: Option<Box<dyn Fn(Segment)>>,
+    new_segment_callback: Option<Box<dyn Fn(Segment) + Send + Sync>>,
     abort_callback: Option<Box<dyn Fn() -> bool>>,
+    diarize_options: Option<DiarizeOptions>,
+    additional_ffmpeg_args: Option<Vec<String>>,
+) -> Result<Transcript> {
+    use uuid::Uuid;
+
+    let session_id = Uuid::new_v4().to_string();
+    let session_manager = get_session_manager();
+
+    // Create session with callbacks
+    session_manager.create_session(
+        session_id.clone(),
+        SessionType::FileTranscription,
+        progress_callback,
+        new_segment_callback,
+    )?;
+
+    // Handle external abort callback if provided
+    if let Some(abort_cb) = abort_callback {
+        // We'd need to periodically check this, but for now just check once at start
+        if abort_cb() {
+            session_manager.abort_session(&session_id)?;
+        }
+    }
+
+    // Call the session-aware transcribe function
+    let result = transcribe(ctx, options, session_id.clone(), diarize_options, additional_ffmpeg_args);
+
+    // Clean up session
+    session_manager.remove_session(&session_id)?;
+
+    result
+}
+
+pub fn transcribe(
+    ctx: &WhisperContext,
+    options: &TranscribeOptions,
+    session_id: SessionId,
     diarize_options: Option<DiarizeOptions>,
     additional_ffmpeg_args: Option<Vec<String>>,
 ) -> Result<Transcript> {
@@ -192,9 +240,13 @@ pub fn transcribe(
     let mut params = setup_params(options);
 
     let mut segments = Vec::new();
+    let _session_manager = get_session_manager();
 
     let st = std::time::Instant::now();
-    if let Some(diarize_options) = diarize_options {
+    if let Some(_diarize_options) = diarize_options {
+        // TODO: Temporarily disabled due to pyannote_rs dependency conflicts
+        tracing::warn!("Diarization temporarily disabled due to dependency conflicts");
+        /* 
         tracing::debug!("Diarize enabled {:?}", diarize_options);
         params.set_single_segment(true);
 
@@ -203,11 +255,11 @@ pub fn transcribe(
         let mut embedding_manager = pyannote_rs::EmbeddingManager::new(diarize_options.max_speakers);
         let mut extractor =
             pyannote_rs::EmbeddingExtractor::new(diarize_options.embedding_model_path).map_err(|e| eyre!("{:?}", e))?;
+        */
+        /*
         for (i, diarize_segment) in diarize_segments.iter().enumerate() {
-            if let Some(ref abort_callback) = abort_callback {
-                if abort_callback() {
-                    break;
-                }
+            if session_manager.is_session_aborted(&session_id) {
+                break;
             }
 
             // whisper compatible. segment indices
@@ -261,59 +313,46 @@ pub fn transcribe(
                 };
                 segments.push(segment.clone());
 
-                if let Some(ref new_segment_callback) = new_segment_callback {
-                    new_segment_callback(segment);
-                }
-                if let Some(ref progress_callback) = progress_callback {
-                    tracing::trace!("progress: {} * {} / 100", i, diarize_segments.len());
-                    let progress = ((i + 1) as f64 / diarize_segments.len() as f64 * 100.0) as i32;
-                    tracing::trace!("progress diarize: {}", progress);
-                    progress_callback(progress);
-                }
+                // Emit segment through session manager
+                session_manager.emit_segment(&session_id, segment).log_error();
+
+                // Emit progress through session manager
+                tracing::trace!("progress: {} * {} / 100", i, diarize_segments.len());
+                let progress = ((i + 1) as f64 / diarize_segments.len() as f64 * 100.0) as i32;
+                tracing::trace!("progress diarize: {}", progress);
+                session_manager.emit_progress(&session_id, progress).log_error();
             }
         }
+        */
     } else {
-        if let Some(callback) = progress_callback {
-            let mut guard = PROGRESS_CALLBACK.lock().map_err(|e| eyre!("{:?}", e))?;
-            let internal_progress_callback = move |progress: i32| callback(progress);
-            *guard = Some(Box::new(internal_progress_callback));
-        }
         let mut samples = vec![0.0f32; original_samples.len()];
 
         whisper_rs::convert_integer_to_float_audio(&original_samples, &mut samples)?;
 
-        if let Some(new_segment_callback) = new_segment_callback {
-            let internal_new_segment_callback = move |segment: SegmentCallbackData| {
-                new_segment_callback(Segment {
-                    start: segment.start_timestamp,
-                    stop: segment.end_timestamp,
-                    speaker: None,
-                    text: segment.text,
-                })
+        // Set segment callback to emit through session manager
+        let session_id_clone = session_id.clone();
+        let internal_segment_callback = move |segment: SegmentCallbackData| {
+            let segment = Segment {
+                start: segment.start_timestamp,
+                stop: segment.end_timestamp,
+                speaker: None,
+                text: segment.text,
             };
-            params.set_segment_callback_safe_lossy(internal_new_segment_callback);
-        }
+            get_session_manager().emit_segment(&session_id_clone, segment).log_error();
+        };
+        params.set_segment_callback_safe_lossy(internal_segment_callback);
 
-        if let Some(abort_callback) = abort_callback {
-            params.set_abort_callback_safe(abort_callback);
-        }
+        // Set abort callback to check session abort signal
+        let session_id_clone = session_id.clone();
+        let internal_abort_callback = move || get_session_manager().is_session_aborted(&session_id_clone);
+        params.set_abort_callback_safe(internal_abort_callback);
 
-        if PROGRESS_CALLBACK.lock().map_err(|e| eyre!("{:?}", e))?.as_ref().is_some() {
-            params.set_progress_callback_safe(|progress| {
-                // using move here lead to crash
-                tracing::trace!("progress callback {}", progress);
-                match PROGRESS_CALLBACK.lock() {
-                    Ok(callback_guard) => {
-                        if let Some(progress_callback) = callback_guard.as_ref() {
-                            progress_callback(progress);
-                        }
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to lock PROGRESS_CALLBACK: {:?}", e);
-                    }
-                }
-            });
-        }
+        // Set progress callback to emit through session manager
+        let session_id_clone = session_id.clone();
+        params.set_progress_callback_safe(move |progress| {
+            tracing::trace!("progress callback {}", progress);
+            get_session_manager().emit_progress(&session_id_clone, progress).log_error();
+        });
 
         tracing::debug!("set start time...");
 

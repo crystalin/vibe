@@ -7,6 +7,7 @@ use crate::{
 use eyre::eyre;
 use once_cell::sync::Lazy;
 use std::fs;
+use std::sync::Arc;
 use tauri::{App, Manager};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 use tauri_plugin_shell::ShellExt;
@@ -20,7 +21,7 @@ pub struct ModelContext {
     pub path: String,
     pub gpu_device: Option<i32>,
     pub use_gpu: Option<bool>,
-    pub handle: WhisperContext,
+    pub handle: Arc<Mutex<WhisperContext>>,
 }
 
 pub fn setup(app: &App) -> Result<(), Box<dyn std::error::Error>> {
@@ -37,6 +38,9 @@ pub fn setup(app: &App) -> Result<(), Box<dyn std::error::Error>> {
 
     // Manage model context
     app.manage(Mutex::new(None::<ModelContext>));
+    
+    // Manage live transcription state
+    app.manage(crate::cmd::live_transcription::LiveTranscriptionState::new());
 
     let store = app.store(STORE_FILENAME)?;
 
