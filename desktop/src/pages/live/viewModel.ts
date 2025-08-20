@@ -12,8 +12,8 @@ import {
   labelForIndex,
   mkStableId,
 } from '~/lib/live';
-import { useToast } from '~/lib/hooks';
 import { usePreferenceProvider } from '~/providers/Preference';
+import { toast as hotToast } from 'react-hot-toast';
 
 // Configuration constants
 const AUDIO_CHUNK_INTERVAL_MS = 500; // Optimal for 50ms backend processing intervals
@@ -48,8 +48,7 @@ export function useLiveTranscription(): UseLiveReturn {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string>();
 
-  const toast = useToast();
-  const { preferences } = usePreferenceProvider();
+  const preference = usePreferenceProvider();
 
   const recRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -88,7 +87,7 @@ export function useLiveTranscription(): UseLiveReturn {
     
     if (pendingChunksRef.current.length > AUDIO_QUEUE_WARNING_SIZE && !warnedBackpressureRef.current) {
       warnedBackpressureRef.current = true;
-      toast('Audio is lagging; dropping old chunks to catch up', 'warning');
+      hotToast('Audio is lagging; dropping old chunks to catch up');
     }
     
     if (pendingChunksRef.current.length > MAX_AUDIO_QUEUE_SIZE) {
@@ -96,7 +95,7 @@ export function useLiveTranscription(): UseLiveReturn {
     }
     
     void pumpQueue();
-  }, [pumpQueue, toast]);
+  }, [pumpQueue]);
 
   const setupEvents = useCallback(async (sid: string) => {
     const u1 = await listen('live_segment', (e: any) => {
@@ -158,7 +157,7 @@ export function useLiveTranscription(): UseLiveReturn {
       setStatus('error');
       const message = e.payload?.message || 'Live transcription error';
       setError(message);
-      toast(message, 'error');
+      hotToast.error(message);
     });
 
     const u3 = await listen('live_stats', (e: any) => {
@@ -167,7 +166,7 @@ export function useLiveTranscription(): UseLiveReturn {
     });
 
     unsubsRef.current = [u1, u2, u3];
-  }, [toast]);
+  }, []);
 
   const tearDownEvents = useCallback(() => {
     unsubsRef.current.forEach(u => u());
@@ -193,15 +192,15 @@ export function useLiveTranscription(): UseLiveReturn {
     } catch (err: any) {
       console.error('Error setting up recorder:', err);
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        toast('Microphone permission denied. Please allow microphone access and try again.', 'error');
+        hotToast.error('Microphone permission denied. Please allow microphone access and try again.');
       } else if (err.name === 'NotFoundError') {
-        toast('No microphone found. Please connect a microphone and try again.', 'error');
+        hotToast.error('No microphone found. Please connect a microphone and try again.');
       } else {
-        toast('Failed to access microphone: ' + err.message, 'error');
+        hotToast.error('Failed to access microphone: ' + err.message);
       }
       return false;
     }
-  }, [onData, toast]);
+  }, [onData]);
 
   const tearDownRecorder = useCallback(() => {
     const rec = recRef.current;
@@ -228,8 +227,8 @@ export function useLiveTranscription(): UseLiveReturn {
     
     try {
       const config: LiveTranscriptionConfig = {
-        model: preferences?.model,
-        language: preferences?.language,
+        model: preference?.modelOptions?.model,
+        language: preference?.modelOptions?.lang,
         minSpeechDuration: 250,
         minSilenceDuration: 500,
         vadSensitivity: 0.5,
@@ -257,13 +256,13 @@ export function useLiveTranscription(): UseLiveReturn {
       }
     } catch (err: any) {
       console.error('Error starting transcription:', err);
-      toast('Failed to start transcription: ' + err.message, 'error');
+      hotToast.error('Failed to start transcription: ' + err.message);
       setStatus('error');
       setError(err.message);
     } finally {
       setIsProcessing(false);
     }
-  }, [status, preferences, setupEvents, setupRecorder, tearDownEvents, toast]);
+  }, [status, preference, setupEvents, setupRecorder, tearDownEvents]);
 
   const stop = useCallback(async () => {
     if (!sessionId) return;
@@ -277,11 +276,11 @@ export function useLiveTranscription(): UseLiveReturn {
       setStatus('stopped');
     } catch (err: any) {
       console.error('Error stopping transcription:', err);
-      toast('Failed to stop transcription: ' + err.message, 'error');
+      hotToast.error('Failed to stop transcription: ' + err.message);
     } finally {
       setIsProcessing(false);
     }
-  }, [sessionId, tearDownEvents, tearDownRecorder, toast]);
+  }, [sessionId, tearDownEvents, tearDownRecorder]);
 
   const pause = useCallback(async () => {
     if (!sessionId || status !== 'recording') return;
@@ -293,11 +292,11 @@ export function useLiveTranscription(): UseLiveReturn {
       setStatus('paused');
     } catch (err: any) {
       console.error('Error pausing transcription:', err);
-      toast('Failed to pause transcription: ' + err.message, 'error');
+      hotToast.error('Failed to pause transcription: ' + err.message);
     } finally {
       setIsProcessing(false);
     }
-  }, [sessionId, status, toast]);
+  }, [sessionId, status]);
 
   const resume = useCallback(async () => {
     if (!sessionId || status !== 'paused') return;
@@ -309,11 +308,11 @@ export function useLiveTranscription(): UseLiveReturn {
       setStatus('recording');
     } catch (err: any) {
       console.error('Error resuming transcription:', err);
-      toast('Failed to resume transcription: ' + err.message, 'error');
+      hotToast.error('Failed to resume transcription: ' + err.message);
     } finally {
       setIsProcessing(false);
     }
-  }, [sessionId, status, toast]);
+  }, [sessionId, status]);
 
   const clear = useCallback(async () => {
     if (!sessionId) return;
@@ -324,21 +323,21 @@ export function useLiveTranscription(): UseLiveReturn {
       seqRef.current = 0;
     } catch (err: any) {
       console.error('Error clearing transcription:', err);
-      toast('Failed to clear transcription: ' + err.message, 'error');
+      hotToast.error('Failed to clear transcription: ' + err.message);
     }
-  }, [sessionId, toast]);
+  }, [sessionId]);
 
   const exportTranscript = useCallback(async (format: 'txt' | 'json' | 'srt') => {
     if (!sessionId) return;
     
     try {
       await invoke('export_live_transcription', { sessionId, format });
-      toast(`Transcript exported as ${format.toUpperCase()}`, 'success');
+      hotToast.success(`Transcript exported as ${format.toUpperCase()}`);
     } catch (err: any) {
       console.error('Error exporting transcription:', err);
-      toast('Failed to export transcription: ' + err.message, 'error');
+      hotToast.error('Failed to export transcription: ' + err.message);
     }
-  }, [sessionId, toast]);
+  }, [sessionId]);
 
   useEffect(() => {
     return () => {
