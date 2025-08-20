@@ -16,6 +16,8 @@ import { useEffect } from 'react'
 import { webviewWindow } from '@tauri-apps/api'
 import * as keepAwake from 'tauri-plugin-keepawake-api'
 import AdvancedTranscribe from '~/components/AdvancedTranscribe'
+import { FaBroadcastTower } from 'react-icons/fa'
+import LivePage from '~/pages/live/Page'
 
 export default function Home() {
 	const { t } = useTranslation()
@@ -49,6 +51,12 @@ export default function Home() {
 				</a>
 				<a role="tab" onClick={vm.switchToLinkTab} className={cx('tab [--tab-border-color:gray]', vm.preference.homeTabIndex === 2 && 'tab-active')}>
 					<LinkIcon className="w-[18px] h-[18px]" />
+				</a>
+				<a
+					role="tab"
+					onClick={() => vm.preference.setHomeTabIndex(3)}
+					className={cx('tab [--tab-border-color:gray]', vm.preference.homeTabIndex === 3 && 'tab-active')}>
+					<FaBroadcastTower className="w-[18px] h-[18px]" />
 				</a>
 			</div>
 
@@ -201,6 +209,13 @@ export default function Home() {
 							</>
 						)}
 					</div>
+				</div>
+			)}
+			
+			{/* Live */}
+			{vm.preference.homeTabIndex === 3 && (
+				<div className="w-full h-[calc(100vh-200px)]">
+					<LivePage />
 				</div>
 			)}
 		</Layout>
